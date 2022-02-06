@@ -20,6 +20,7 @@
 # include  "TimerNetworkService.h"
 # include  "TimerControlBox.h"
 # include  "version_tag.h"
+# include  <QNetworkInterface>
 # include  <QTcpSocket>
 # include  <cstdio>
 # include  <cassert>
@@ -167,7 +168,31 @@ TimerNetworkService::TimerNetworkService(TimerControlBox*parent)
       connect(&zero_conf_, SIGNAL(serviceUpdated(QZeroConfService)),
 	      this, SLOT(service_updated(QZeroConfService)));
 
-#if 0
+      listen();
+      fprintf(stdout, "XXXX TimerNetworkService: server port = %u\n", serverPort());
+      QString port_text;
+      port_text.setNum(serverPort());
+      controls_->network_service_port(port_text);
+
+      scan_for_networks_();
+
+      connect(&clock_, SIGNAL(timeout()), SLOT(clock_timeout()));
+      clock_.setSingleShot(false);
+      clock_.setInterval(2000);
+      clock_.start();
+}
+
+TimerNetworkService::~TimerNetworkService()
+{
+}
+
+/*
+ * This method scans all the network addresses (that are up) and sees if any
+ * come alive or go away. If the set of available networks changes, restart
+ * the publish.
+ */
+void TimerNetworkService::scan_for_networks_()
+{
       QList<QHostAddress> tmp_addresses = QNetworkInterface::allAddresses();
       QList<QHostAddress> addresses;
       for (QList<QHostAddress>::const_iterator cur = tmp_addresses.begin()
@@ -177,24 +202,41 @@ TimerNetworkService::TimerNetworkService(TimerControlBox*parent)
 
 	    addresses.append(*cur);
       }
+
+      QStringList built_list;
       for (QList<QHostAddress>::const_iterator cur = addresses.begin()
 		 ; cur != addresses.end() ; ++ cur) {
-	    fprintf(stdout, "XXXX Host IP address: %s\n", cur->toString().toLatin1().data());
+	    if (!cur->isGlobal())
+		  continue;
+	    if (cur->protocol() != QAbstractSocket::IPv4Protocol)
+		  continue;
+	    built_list.push_back(cur->toString());
       }
-#endif
 
-      listen();
-      fprintf(stdout, "XXXX TimerNetworkService: server port = %u\n", serverPort());
-      QString port_text;
-      port_text.setNum(serverPort());
-      controls_->network_service_port(port_text);
+      // If the list is the same as it has been, then there is nothing to do.
+      if (built_list == if_list_)
+	    return;
 
+      fprintf(stdout, "XXXX Got a network interfaces list. (%d)\n",  built_list.size());
+      for (QString&cur : built_list) {
+	    fprintf(stdout, "XXXX    %s\n", cur.toLatin1().data());
+      }
+
+      if_list_ = built_list;
+      controls_->network_interfaces(if_list_);
+
+      fprintf(stdout, "XXXX Publish service.\n");
+      fflush(stdout);
       zero_conf_.clearServiceTxtRecords();
       zero_conf_.startServicePublish("Icarus Archery Timer", "_icarus_archery_timer._tcp", "local", serverPort());
 }
 
-TimerNetworkService::~TimerNetworkService()
+void TimerNetworkService::clock_timeout()
 {
+      if (connection_ == 0) {
+	    // Connection tick.
+	    scan_for_networks_();
+      }
 }
 
 void TimerNetworkService::new_connection_signal(void)
@@ -212,6 +254,7 @@ void TimerNetworkService::new_connection_signal(void)
 	    pauseAccepting();
 	    connection_ = sock;
 	    controls_->network_service_port("connected");
+	    controls_->network_interfaces(QStringList());
 	    connect(connection_, SIGNAL(readyRead()),   SLOT(ready_read()));
 	    connect(connection_, SIGNAL(disconnected()),SLOT(port_disconnected()));
 	      // Stop publishing, if connected.
@@ -253,6 +296,7 @@ void TimerNetworkService::port_disconnected(void)
       QString port_text;
       port_text.setNum(serverPort());
       controls_->network_service_port(port_text);
+      controls_->network_interfaces(if_list_);
 	// Resume publishing.
 	//zero_conf_.clearServiceTxtRecords();
 	//zero_conf_.startServicePublish("Icarus Archery Timer", "_icarus_archery_timer._tcp", "local", serverPort());

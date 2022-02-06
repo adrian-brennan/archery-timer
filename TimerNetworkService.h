@@ -53,6 +53,7 @@
 
 # include  <QString>
 # include  <QTcpServer>
+# include  <QTimer>
 # include  "qzeroconf.h"
 
 class TimerControlBox;
@@ -76,8 +77,11 @@ class TimerNetworkService : private QTcpServer {
       void service_removed(QZeroConfService srv);
       void service_updated(QZeroConfService srv);
 
+      void clock_timeout();
+
     private:
       void process_command_(const QString&cmd);
+      void scan_for_networks_();
 
     private:
 	// State machine for publishing my address.
@@ -86,6 +90,10 @@ class TimerNetworkService : private QTcpServer {
       TimerControlBox*controls_;
       QTcpSocket*     connection_;
       QString         line_buffer_;
+      QStringList     if_list_;
+
+      // Timer for polling and similar.
+      QTimer clock_;
 };
 
 #endif

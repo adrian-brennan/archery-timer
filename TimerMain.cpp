@@ -124,6 +124,12 @@ void TimerMain::network_service_port(const QString&port_text)
       ui->connected_label->setText(port_text);
 }
 
+void TimerMain::network_interfaces(const QStringList&if_list)
+{
+      ui->ip_interface_list->clear();
+      ui->ip_interface_list->addItems(if_list);
+}
+
 void TimerMain::keyPressEvent(QKeyEvent*event)
 {
 
@@ -139,6 +145,11 @@ void TimerMain::keyPressEvent(QKeyEvent*event)
 	// Toggle Fullscreen mode with the Escape key
       if (event->key() == Qt::Key_Escape) {
 	    toggle_fullscreen();
+	    return;
+      }
+      // Fast Forward
+      if (event->key() == Qt::Key_F) {
+	    control_box_->fast_forward_command();
 	    return;
       }
 	// Makeup end.
@@ -167,7 +178,12 @@ void TimerMain::keyPressEvent(QKeyEvent*event)
 	    control_box_->fast_forward_command();
 	    return;
       }
-
+      // Emergency Stop
+      if (event->key() == Qt::Key_E) {
+	    printf("KEYBOARD: Emergency Stop\n");
+	    control_box_->emergency_stop_command();
+	    return;
+      }
       printf("XXXX key() == 0x%04x\n", event->key());
       event->ignore();
 }
